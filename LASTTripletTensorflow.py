@@ -80,15 +80,6 @@ for step in range(5000):
                         siamese.x1: batch_x1,
                         siamese.x2: batch_x2,
                         siamese.y_: batch_y})
-
-    if np.isnan(loss_v):
-        print('Model diverged with loss = NaN')
-        quit()
-
-    if step % 10 == 0:
+   
+    if step % 50 == 0:
         print ('step %d: loss %.3f' % (step, loss_v))
-
-    if step % 1000 == 0 and step > 0:
-        saver.save(sess, './model')
-        embed = siamese.o1.eval({siamese.x1: mnist.test.images})
-        embed.tofile('embed.txt')
