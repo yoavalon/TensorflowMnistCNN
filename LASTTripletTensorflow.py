@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data # for data
 import numpy as np
 
-class siamese:
+class TripletNet:
     
     def __init__(self):
         self.x1 = tf.placeholder(tf.float32, [None, 784])
@@ -13,6 +13,8 @@ class siamese:
             self.o1 = self.network(self.x1)
             scope.reuse_variables() 
             self.o2 = self.network(self.x2)
+            scope.reuse_variables() 
+            self.o3 = self.network(self.x3)
 
         # Create loss
         self.y_ = tf.placeholder(tf.float32, [None])
@@ -40,39 +42,40 @@ class siamese:
         margin = 5.0
         labels_t = self.y_
         labels_f = tf.subtract(1.0, self.y_, name="1-yi")          # labels_ = !labels;
+        
         eucd2 = tf.pow(tf.subtract(self.o1, self.o2), 2)
         eucd2 = tf.reduce_sum(eucd2, 1)
         eucd = tf.sqrt(eucd2+1e-6, name="eucd")
+        
         C = tf.constant(margin, name="C")        
         pos = tf.multiply(labels_t, eucd2, name="yi_x_eucd2")        
         neg = tf.multiply(labels_f, tf.pow(tf.maximum(tf.subtract(C, eucd), 0), 2), name="Nyi_x_C-eucd_xx_2")
+        
         losses = tf.add(pos, neg, name="losses")
         loss = tf.reduce_mean(losses, name="loss")
         return loss
 
 
-# prepare data and tf.session
+
+      
+      
 mnist = input_data.read_data_sets('MNIST_data', one_hot=False)
 
 g = tf.Graph() #reset graph
 sess = tf.InteractiveSession(graph=g)
 
-#tf.reset_default_graph() 
-
-# setup siamese network
-siamese = siamese();
+#Prepare Network
+siamese = TripletNet();
 train_step = tf.train.GradientDescentOptimizer(0.01).minimize(siamese.loss)
-saver = tf.train.Saver()
+
 tf.initialize_all_variables().run()
 
-# start training
-if load: saver.restore(sess, './model')
 
-for step in range(500):
+for step in range(5000):
     batch_x1, batch_y1 = mnist.train.next_batch(128)
     batch_x2, batch_y2 = mnist.train.next_batch(128)
     batch_y = (batch_y1 == batch_y2).astype('float')
-
+    
     _, loss_v = sess.run([train_step, siamese.loss], feed_dict={
                         siamese.x1: batch_x1,
                         siamese.x2: batch_x2,
