@@ -64,9 +64,8 @@ class TripletNet:
         loss = tf.reduce_mean(losses, name="loss")
         return loss
 
-def Create_Triplet_Batch(mnist) :
-  
-  print("create tripplet")  
+# Create random Triplet and assign binary Label      
+def Create_Triplet(mnist) :
   
   ranA = np.random.randint(0,mnist.train.labels.shape[0], 1)
   a_img = mnist.train.images[ranA]
@@ -79,50 +78,41 @@ def Create_Triplet_Batch(mnist) :
   b_par = (b_lab % 2 == 0)
   
   cond = True  
-  ranC = 1
-  
-  print(a_lab)
-  print(a_par)
-  
-  print(b_lab)
-  print(b_par)
+  ranC = 1  
     
   while(cond) :
   
     ranC = np.random.randint(0,mnist.train.labels.shape[0], 1)
     c_lab = mnist.train.labels[ranC]
     c_par = (c_lab % 2 == 0)
-    if((a_par == False and b_par == False and c_par == False) or (a_par == True and b_par == True and c_par == True))  : 
-      #print("cond true")
-      #print("     c_par = ", c_par)
-      #print("           c_lab = ", c_lab)      
+    if((a_par == False and b_par == False and c_par == False) or (a_par == True and b_par == True and c_par == True))  :       
       cond = True
-    else : 
-      print("cond false")
+    else :       
       cond = False
   
   c_img = mnist.train.images[ranC]
-  c_lab = mnist.train.labels[ranC]
+  c_lab = mnist.train.labels[ranC]  
   
-  print(c_lab)
-  print(c_par)
+  sum = int(a_par) + int(b_par) + int(c_par) -1 # 0 = singe-odd/double-even 1 = single-even/double-odd
   
-  print("sum")
-  print(int(a_par) + int(b_par) + int(c_par))
+  return [a_img, b_img, c_img, sum] 
   
-  return [a_img, b_img, c_img, sum-1]
-  
-  
-  
-  #batch_x1, batch_y1 = mnist.train.next_batch(128)
-  #batch_x2, batch_y2 = mnist.train.next_batch(128)
-  #batch_x3, batch_y3 = mnist.train.next_batch(128)
-  
-  #batch_y = (batch_y1 == batch_y2).astype('float')
-  
+#Creates batch of shape (128,4) where as 128 is batch size and 4 stands for a triplet plus binary label
+def Create_Triplet_Batch(mnist) :  
+  Triplet_Set = []
+  for i in range(128) : 
+    Triplet_Set.append(Create_Triplet(mnist))
+    
+  return np.array(Triplet_Set)
+
+
+
+
 
 mnist = input_data.read_data_sets('MNIST_data', one_hot=False)
-Create_Triplet_Batch(mnist)      
+
+print(Create_Triplet_Batch(mnist).shape)
+
 
 g = tf.Graph() #reset graph
 sess = tf.InteractiveSession(graph=g)
