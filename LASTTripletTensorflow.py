@@ -7,7 +7,7 @@ class TripletNet:
     def __init__(self):
         self.x1 = tf.placeholder(tf.float32, [None, 784])
         self.x2 = tf.placeholder(tf.float32, [None, 784])
-        self.x3 = tf.placeholder(tf.float32, [None, 784]) #third element of Triplet
+        self.x3 = tf.placeholder(tf.float32, [None, 784]) 
         
         with tf.variable_scope("siamese") as scope:
             self.o1 = self.network(self.x1)
@@ -18,7 +18,7 @@ class TripletNet:
 
         # Create loss
         self.y_ = tf.placeholder(tf.float32, [None])
-        self.loss = self.loss_with_spring()
+        self.loss = self.loss_with_spring() #self.TripletLoss() #self.loss_with_spring()
 
     def network(self, x):
         weights = []
@@ -37,8 +37,16 @@ class TripletNet:
         b = tf.get_variable(name+'b', dtype=tf.float32, initializer=tf.constant(0.01, shape=[n_weight], dtype=tf.float32))
         fc = tf.nn.bias_add(tf.matmul(bottom, W), b)
         return fc
+      
+    def euclidean_distance(x, y):   
 
-    def TripletLoss(anchor_output, positive_output, negative_output) : #added
+        d = tf.square(tf.subtract(x, y))
+        d = tf.sqrt(tf.reduce_sum(d))
+        
+        return d
+
+    def TripletLoss(self) : #anchor_output, positive_output, negative_output
+      
         d_pos = tf.reduce_sum(tf.square(anchor_output - positive_output), 1)
         d_neg = tf.reduce_sum(tf.square(anchor_output - negative_output), 1)
 
@@ -63,76 +71,77 @@ class TripletNet:
         losses = tf.add(pos, neg, name="losses")
         loss = tf.reduce_mean(losses, name="loss")
         return loss
-
+      
+def GetOpositeParityImage(mnist, par) :
+  
+  parity = par
+  ran = -1
+  
+  while(parity == par) :
+  
+    ran = np.random.randint(0,mnist.train.labels.shape[0], 1)
+    label = mnist.train.labels[ran]
+    parity = (label % 2 == 0)
+  
+  print(parity)
+  return mnist.train.images[ran]
+      
 # Create random Triplet and assign binary Label      
-def Create_Triplet(mnist) :
+def GetTriplet(mnist) :
   
-  ranA = np.random.randint(0,mnist.train.labels.shape[0], 1)
-  a_img = mnist.train.images[ranA]
-  a_lab = mnist.train.labels[ranA]
-  a_par = (a_lab % 2 == 0)
+  #change: just transfer index of image and not complete image for memory improvment
   
-  ranB = np.random.randint(0,mnist.train.labels.shape[0], 1)
-  b_img = mnist.train.images[ranB]
-  b_lab = mnist.train.labels[ranB]
-  b_par = (b_lab % 2 == 0)
+  ran = np.random.randint(0,mnist.train.labels.shape[0], 1)
+  img = mnist.train.images[ran]
+  lab = mnist.train.labels[ran]
+  par = (lab % 2 == 0)
   
-  cond = True  
-  ranC = 1  
-    
-  while(cond) :
+  print(lab)
   
-    ranC = np.random.randint(0,mnist.train.labels.shape[0], 1)
-    c_lab = mnist.train.labels[ranC]
-    c_par = (c_lab % 2 == 0)
-    if((a_par == False and b_par == False and c_par == False) or (a_par == True and b_par == True and c_par == True))  :       
-      cond = True
-    else :       
-      cond = False
-  
-  c_img = mnist.train.images[ranC]
-  c_lab = mnist.train.labels[ranC]  
-  
-  sum = int(a_par) + int(b_par) + int(c_par) -1 # 0 = singe-odd/double-even 1 = single-even/double-odd
-  
-  return [a_img, b_img, c_img, sum] 
+  print(par)
+  return [img, GetOpositeParityImage(mnist, par), GetOpositeParityImage(mnist, par), par] #return [negative, positive, anchor, binary label]   par = 0 even, odd, odd     par = 1 odd, even, even
   
 #Creates batch of shape (128,4) where as 128 is batch size and 4 stands for a triplet plus binary label
-def Create_Triplet_Batch(mnist) :  
+def CreateTripletBatch(mnist) :  
   Triplet_Set = []
   for i in range(128) : 
-    Triplet_Set.append(Create_Triplet(mnist))
+    Triplet_Set.append(GetTriplet(mnist))
     
   return np.array(Triplet_Set)
 
 
-
-
+#Start 
 
 mnist = input_data.read_data_sets('MNIST_data', one_hot=False)
-
-print(Create_Triplet_Batch(mnist).shape)
-
 
 g = tf.Graph() #reset graph
 sess = tf.InteractiveSession(graph=g)
 
+#print(Create_Triplet_Batch(mnist).shape)
+print(GetTriplet(mnist))
+
+'''
 #Prepare Network
 siamese = TripletNet();
 train_step = tf.train.GradientDescentOptimizer(0.01).minimize(siamese.loss)
 
 tf.initialize_all_variables().run()
 
-
 for step in range(5000):
-    batch_x1, batch_y1 = mnist.train.next_batch(128)
-    batch_x2, batch_y2 = mnist.train.next_batch(128)
-    batch_y = (batch_y1 == batch_y2).astype('float')
+  
+    Triplet = Create_Triplet_Batch(mnist)
+  
+    batch_x1 = Triplet[0]
+    batch_x2 = Triplet[1]
+    batch_x3 = Triplet[2]
+    batch_y = Triplet[3]
     
     _, loss_v = sess.run([train_step, siamese.loss], feed_dict={
                         siamese.x1: batch_x1,
                         siamese.x2: batch_x2,
+                        siamese.x3: batch_x3,
                         siamese.y_: batch_y})
    
     if step % 50 == 0:
         print ('step %d: loss %.3f' % (step, loss_v))
+'''
