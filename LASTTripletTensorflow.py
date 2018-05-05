@@ -38,6 +38,15 @@ class TripletNet:
         fc = tf.nn.bias_add(tf.matmul(bottom, W), b)
         return fc
 
+    def TripletLoss(anchor_output, positive_output, negative_output) : #added
+        d_pos = tf.reduce_sum(tf.square(anchor_output - positive_output), 1)
+        d_neg = tf.reduce_sum(tf.square(anchor_output - negative_output), 1)
+
+        loss = tf.maximum(0., margin + d_pos - d_neg)
+        loss = tf.reduce_mean(loss)
+        
+        return 1
+
     def loss_with_spring(self):
         margin = 5.0
         labels_t = self.y_
@@ -55,11 +64,65 @@ class TripletNet:
         loss = tf.reduce_mean(losses, name="loss")
         return loss
 
+def Create_Triplet_Batch(mnist) :
+  
+  print("create tripplet")  
+  
+  ranA = np.random.randint(0,mnist.train.labels.shape[0], 1)
+  a_img = mnist.train.images[ranA]
+  a_lab = mnist.train.labels[ranA]
+  a_par = (a_lab % 2 == 0)
+  
+  ranB = np.random.randint(0,mnist.train.labels.shape[0], 1)
+  b_img = mnist.train.images[ranB]
+  b_lab = mnist.train.labels[ranB]
+  b_par = (b_lab % 2 == 0)
+  
+  cond = True  
+  ranC = 1
+  
+  print(a_lab)
+  print(a_par)
+  
+  print(b_lab)
+  print(b_par)
+    
+  while(cond) :
+  
+    ranC = np.random.randint(0,mnist.train.labels.shape[0], 1)
+    c_lab = mnist.train.labels[ranC]
+    c_par = (c_lab % 2 == 0)
+    if((a_par == False and b_par == False and c_par == False) or (a_par == True and b_par == True and c_par == True))  : 
+      #print("cond true")
+      #print("     c_par = ", c_par)
+      #print("           c_lab = ", c_lab)      
+      cond = True
+    else : 
+      print("cond false")
+      cond = False
+  
+  c_img = mnist.train.images[ranC]
+  c_lab = mnist.train.labels[ranC]
+  
+  print(c_lab)
+  print(c_par)
+  
+  print("sum")
+  print(int(a_par) + int(b_par) + int(c_par))
+  
+  return [a_img, b_img, c_img, sum-1]
+  
+  
+  
+  #batch_x1, batch_y1 = mnist.train.next_batch(128)
+  #batch_x2, batch_y2 = mnist.train.next_batch(128)
+  #batch_x3, batch_y3 = mnist.train.next_batch(128)
+  
+  #batch_y = (batch_y1 == batch_y2).astype('float')
+  
 
-
-      
-      
 mnist = input_data.read_data_sets('MNIST_data', one_hot=False)
+Create_Triplet_Batch(mnist)      
 
 g = tf.Graph() #reset graph
 sess = tf.InteractiveSession(graph=g)
