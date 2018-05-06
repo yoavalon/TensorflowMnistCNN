@@ -2,20 +2,27 @@ import tensorflow as tf
 from tensorflow.examples.tutorials.mnist import input_data # for data
 import numpy as np
 
+#Hyper-parameters
+
+batchSize = 64
+epochs = 100
+margin = 4.
+learningRate = 0.01
+#optimizer  see : http://tflearn.org/optimizers/
+
 class TripletNet:
     
     def __init__(self):
-        self.x1 = tf.placeholder(tf.float32, [None, 784])
-        self.first = tf.placeholder(tf.float32, [None, 28, 28, 1], name='left')
+        self.x1 = tf.placeholder(tf.float32, [None, 784])        
         self.x2 = tf.placeholder(tf.float32, [None, 784])
         self.x3 = tf.placeholder(tf.float32, [None, 784]) 
         
-        with tf.variable_scope("siamese") as scope:
-            self.o1 = self.mynet(tf.reshape(self.x1,[128,28,28,1])) #self.network(self.x1)
+        with tf.variable_scope("triplet") as scope:
+            self.o1 = self.model(tf.reshape(self.x1,[batchSize,28,28,1])) #self.network(self.x1)
             scope.reuse_variables() 
-            self.o2 = self.mynet(tf.reshape(self.x2,[128,28,28,1])) #self.network(self.x2)
+            self.o2 = self.model(tf.reshape(self.x2,[batchSize,28,28,1])) #self.network(self.x2)
             scope.reuse_variables() 
-            self.o3 = self.mynet(tf.reshape(self.x3,[128,28,28,1])) #self.network(self.x3)
+            self.o3 = self.model(tf.reshape(self.x3,[batchSize,28,28,1])) #self.network(self.x3)
 
         # Create loss
         self.y_ = tf.placeholder(tf.float32, [None])
@@ -30,7 +37,7 @@ class TripletNet:
         fc3 = self.fc_layer(ac2, 2, "fc3")
         return fc3
     
-    def mynet(self, input, reuse = tf.AUTO_REUSE) :
+    def model(self, input, reuse = tf.AUTO_REUSE) :
         
         if (reuse):
           tf.get_variable_scope().reuse_variables()
@@ -98,8 +105,6 @@ class TripletNet:
     #Triplet Loss 
     def TripletLoss(self) :
       
-        margin = 5.0
-      
         anchor_output = self.o3
         positive_output = self.o2
         negative_output = self.o1                
@@ -158,7 +163,7 @@ def GetTriplet(mnist) :
 #Creates batch of shape (128,4) where as 128 is batch size and 4 stands for a triplet plus binary label
 def CreateTripletBatch(mnist) :  
   Triplet_Set = []
-  for i in range(128) : 
+  for i in range(batchSize) : 
     Triplet_Set.append(GetTriplet(mnist))
   
   return np.array(Triplet_Set)
@@ -172,7 +177,7 @@ def FetchImages(mnist, indexes) :
     
   res = np.asarray(imgList)  
   
-  return np.reshape(res, (128,784))
+  return np.reshape(res, (batchSize,784))
 
 #Start 
 
@@ -182,26 +187,35 @@ g = tf.Graph() #reset graph
 sess = tf.InteractiveSession(graph=g)
 
 #Prepare Network
-siamese = TripletNet();
-train_step = tf.train.GradientDescentOptimizer(0.01).minimize(siamese.loss)
+triplet = TripletNet();
+train_step = tf.train.GradientDescentOptimizer(learningRate).minimize(triplet.loss)
 
 tf.initialize_all_variables().run()
 
+lossList = []
 
-for step in range(5000):
+for step in range(epochs):  
   
     Triplet = CreateTripletBatch(mnist)
           
     batch_x1 = FetchImages(mnist, Triplet[:,0])
     batch_x2 = FetchImages(mnist, Triplet[:,1])
     batch_x3 = FetchImages(mnist, Triplet[:,2])
-    batch_y = np.reshape(Triplet[:,3], (128,)) 
+    batch_y = np.reshape(Triplet[:,3], (batchSize,)) 
     
-    _, loss_v = sess.run([train_step, siamese.loss], feed_dict={
-                        siamese.x1: batch_x1,
-                        siamese.x2: batch_x2,
-                        siamese.x3: batch_x3,
-                        siamese.y_: batch_y})
-   
+    _, loss_v = sess.run([train_step, triplet.loss], feed_dict={
+                        triplet.x1: batch_x1,
+                        triplet.x2: batch_x2,
+                        triplet.x3: batch_x3,
+                        triplet.y_: batch_y})
+    
+    lossList.append(loss_v)
     if step % 1 == 0:
         print ('step %d: loss %.3f' % (step, loss_v))
+
+# plot Loss Graph
+plt.plot(lossList)
+plt.title('Loss')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.show()
