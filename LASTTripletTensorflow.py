@@ -38,6 +38,28 @@ class TripletNet:
         fc = tf.nn.bias_add(tf.matmul(bottom, W), b)
         return fc
 
+    def compute_euclidean_distance(self, x, y):
+    
+        d = tf.square(tf.sub(x, y))
+        d = tf.sqrt(tf.reduce_sum(d)) # What about the axis ???
+        
+        return d
+
+
+    def compute_triplet_loss(anchor_feature, positive_feature, negative_feature, margin):
+
+        with tf.name_scope("triplet_loss"):
+        
+          d_p_squared = tf.square(compute_euclidean_distance(anchor_feature, positive_feature))
+          d_n_squared = tf.square(compute_euclidean_distance(anchor_feature, negative_feature))
+
+          loss = tf.maximum(0., d_p_squared - d_n_squared + margin)
+        #loss = d_p_squared - d_n_squared + margin
+
+        return tf.reduce_mean(loss), tf.reduce_mean(d_p_squared), tf.reduce_mean(d_n_squared)
+
+      
+    #Triplet Loss 
     def TripletLoss(self) :
       
         margin = 1.0
@@ -46,30 +68,33 @@ class TripletNet:
         positive_output = self.o2
         negative_output = self.o1                
         
-        d_pos = tf.reduce_sum(tf.square(anchor_output - positive_output), 1)
-        d_neg = tf.reduce_sum(tf.square(anchor_output - negative_output), 1)
         
-        loss = tf.maximum(0., margin + d_pos - d_neg)
-        loss = tf.reduce_mean(loss)
+        with tf.name_scope("triplet_loss"):
         
-        return loss
-
-    def loss_with_spring(self):
-        margin = 5.0
-        labels_t = self.y_
-        labels_f = tf.subtract(1.0, self.y_, name="1-yi")          # labels_ = !labels;
+          d_p_squared = tf.square(tf.sqrt(tf.reduce_sum(tf.square(tf.subtract(anchor_output, positive_output)))))
+          d_n_squared = tf.square(tf.sqrt(tf.reduce_sum(tf.square(tf.subtract(anchor_output, negative_output)))))
+          
+          loss = tf.maximum(0., d_p_squared - d_n_squared + margin)
         
-        eucd2 = tf.pow(tf.subtract(self.o1, self.o2), 2)
-        eucd2 = tf.reduce_sum(eucd2, 1)
-        eucd = tf.sqrt(eucd2+1e-6, name="eucd")
+        #part always there
+        #d_pos = tf.reduce_sum(tf.square(anchor_output - positive_output), 1)
+        #d_neg = tf.reduce_sum(tf.square(anchor_output - negative_output), 1)
         
-        C = tf.constant(margin, name="C")        
-        pos = tf.multiply(labels_t, eucd2, name="yi_x_eucd2")        
-        neg = tf.multiply(labels_f, tf.pow(tf.maximum(tf.subtract(C, eucd), 0), 2), name="Nyi_x_C-eucd_xx_2")
+        #testing                       
         
-        losses = tf.add(pos, neg, name="losses")
-        loss = tf.reduce_mean(losses, name="loss")
-        return loss
+        #losses = tf.maximum(0., margin + d_pos - d_neg, name="losses")
+        #loss = tf.reduce_mean(losses, name="loss")
+        #loss = 12. #tf.reduce_sum(anchor_output - positive_output)
+        
+        #original
+        #loss = tf.maximum(0., margin + d_pos - d_neg)
+        #loss = tf.reduce_mean(loss)
+        
+        #copied
+        #losses = tf.add(pos, neg, name="losses")
+        #loss = tf.reduce_mean(losses, name="loss")
+        
+        return tf.reduce_mean(loss)
 
 #Get image of the opposite parity
 def GetOpositeParityImage(mnist, par) :
@@ -142,5 +167,5 @@ for step in range(5000):
                         siamese.x3: batch_x3,
                         siamese.y_: batch_y})
    
-    if step % 50 == 0:
+    if step % 1 == 0:
         print ('step %d: loss %.3f' % (step, loss_v))
