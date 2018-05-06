@@ -18,7 +18,7 @@ class TripletNet:
 
         # Create loss
         self.y_ = tf.placeholder(tf.float32, [None])
-        self.loss = self.loss_with_spring() #self.TripletLoss() #self.loss_with_spring()
+        self.loss = self.TripletLoss() #self.loss_with_spring()
 
     def network(self, x):
         weights = []
@@ -37,23 +37,22 @@ class TripletNet:
         b = tf.get_variable(name+'b', dtype=tf.float32, initializer=tf.constant(0.01, shape=[n_weight], dtype=tf.float32))
         fc = tf.nn.bias_add(tf.matmul(bottom, W), b)
         return fc
-      
-    def euclidean_distance(x, y):   
 
-        d = tf.square(tf.subtract(x, y))
-        d = tf.sqrt(tf.reduce_sum(d))
+    def TripletLoss(self) :
+      
+        margin = 1.0
+      
+        anchor_output = self.o3
+        positive_output = self.o2
+        negative_output = self.o1                
         
-        return d
-
-    def TripletLoss(self) : #anchor_output, positive_output, negative_output
-      
         d_pos = tf.reduce_sum(tf.square(anchor_output - positive_output), 1)
         d_neg = tf.reduce_sum(tf.square(anchor_output - negative_output), 1)
-
+        
         loss = tf.maximum(0., margin + d_pos - d_neg)
         loss = tf.reduce_mean(loss)
         
-        return 1
+        return loss
 
     def loss_with_spring(self):
         margin = 5.0
