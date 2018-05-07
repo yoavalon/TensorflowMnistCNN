@@ -5,9 +5,9 @@ import numpy as np
 #Hyper-parameters
 
 batchSize = 64
-epochs = 100
+epochs = 20
 margin = 4.
-learningRate = 0.01
+learningRate = 0.0001
 #optimizer  see : http://tflearn.org/optimizers/
 
 class TripletNet:
@@ -23,24 +23,16 @@ class TripletNet:
             self.o2 = self.model(tf.reshape(self.x2,[batchSize,28,28,1])) #self.network(self.x2)
             scope.reuse_variables() 
             self.o3 = self.model(tf.reshape(self.x3,[batchSize,28,28,1])) #self.network(self.x3)
-
+        
         # Create loss
         self.y_ = tf.placeholder(tf.float32, [None])
         self.loss = self.TripletLoss() #self.loss_with_spring()
-
-    def network(self, x):
-        weights = []
-        fc1 = self.fc_layer(x, 1024, "fc1")
-        ac1 = tf.nn.relu(fc1)
-        fc2 = self.fc_layer(ac1, 1024, "fc2")
-        ac2 = tf.nn.relu(fc2)
-        fc3 = self.fc_layer(ac2, 2, "fc3")
-        return fc3
-    
+        
+  
     def model(self, input, reuse = tf.AUTO_REUSE) :
         
         if (reuse):
-          tf.get_variable_scope().reuse_variables()
+          tf.get_variable_scope().reuse_variables()          
         
         with tf.name_scope("model") :          
           with tf.variable_scope("conv1") as scope:
@@ -70,45 +62,13 @@ class TripletNet:
 
         net = tf.contrib.layers.flatten(net)
         return net
-      
-
-    def fc_layer(self, bottom, n_weight, name):
-        assert len(bottom.get_shape()) == 2
-        n_prev_weight = bottom.get_shape()[1]
-        initer = tf.truncated_normal_initializer(stddev=0.01)
-        W = tf.get_variable(name+'W', dtype=tf.float32, shape=[n_prev_weight, n_weight], initializer=initer)
-        b = tf.get_variable(name+'b', dtype=tf.float32, initializer=tf.constant(0.01, shape=[n_weight], dtype=tf.float32))
-        fc = tf.nn.bias_add(tf.matmul(bottom, W), b)
-        return fc
-
-    def compute_euclidean_distance(self, x, y):
-    
-        d = tf.square(tf.sub(x, y))
-        d = tf.sqrt(tf.reduce_sum(d)) # What about the axis ???
-        
-        return d
 
 
-    def compute_triplet_loss(anchor_feature, positive_feature, negative_feature, margin):
-
-        with tf.name_scope("triplet_loss"):
-        
-          d_p_squared = tf.square(compute_euclidean_distance(anchor_feature, positive_feature))
-          d_n_squared = tf.square(compute_euclidean_distance(anchor_feature, negative_feature))
-
-          loss = tf.maximum(0., d_p_squared - d_n_squared + margin)
-        #loss = d_p_squared - d_n_squared + margin
-
-        return tf.reduce_mean(loss), tf.reduce_mean(d_p_squared), tf.reduce_mean(d_n_squared)
-
-      
-    #Triplet Loss 
     def TripletLoss(self) :
       
         anchor_output = self.o3
         positive_output = self.o2
-        negative_output = self.o1                
-        
+        negative_output = self.o1                        
         
         with tf.name_scope("triplet_loss"):
         
@@ -116,25 +76,7 @@ class TripletNet:
           d_n_squared = tf.square(tf.sqrt(tf.reduce_sum(tf.square(tf.subtract(anchor_output, negative_output)))))
           
           loss = tf.maximum(0., d_p_squared - d_n_squared + margin)
-        
-        #part always there
-        #d_pos = tf.reduce_sum(tf.square(anchor_output - positive_output), 1)
-        #d_neg = tf.reduce_sum(tf.square(anchor_output - negative_output), 1)
-        
-        #testing                       
-        
-        #losses = tf.maximum(0., margin + d_pos - d_neg, name="losses")
-        #loss = tf.reduce_mean(losses, name="loss")
-        #loss = 12. #tf.reduce_sum(anchor_output - positive_output)
-        
-        #original
-        #loss = tf.maximum(0., margin + d_pos - d_neg)
-        #loss = tf.reduce_mean(loss)
-        
-        #copied
-        #losses = tf.add(pos, neg, name="losses")
-        #loss = tf.reduce_mean(losses, name="loss")
-        
+      
         return tf.reduce_mean(loss)
 
 #Get image of the opposite parity
@@ -168,6 +110,7 @@ def CreateTripletBatch(mnist) :
   
   return np.array(Triplet_Set)
 
+#Fetch image data from index
 def FetchImages(mnist, indexes) : 
   
   imgList = []
@@ -186,9 +129,9 @@ mnist = input_data.read_data_sets('MNIST_data', one_hot=False)
 g = tf.Graph() #reset graph
 sess = tf.InteractiveSession(graph=g)
 
-#Prepare Network
 triplet = TripletNet();
-train_step = tf.train.GradientDescentOptimizer(learningRate).minimize(triplet.loss)
+#train_step = tf.train.GradientDescentOptimizer(learningRate).minimize(triplet.loss)
+optimizer = tf.train.AdamOptimizer(learning_rate = learningRate).minimize(triplet.loss)
 
 tf.initialize_all_variables().run()
 
@@ -203,11 +146,14 @@ for step in range(epochs):
     batch_x3 = FetchImages(mnist, Triplet[:,2])
     batch_y = np.reshape(Triplet[:,3], (batchSize,)) 
     
-    _, loss_v = sess.run([train_step, triplet.loss], feed_dict={
+    _, loss_v = sess.run([optimizer, triplet.loss], feed_dict={
                         triplet.x1: batch_x1,
                         triplet.x2: batch_x2,
                         triplet.x3: batch_x3,
                         triplet.y_: batch_y})
+    
+    print(a)
+    
     
     lossList.append(loss_v)
     if step % 1 == 0:
