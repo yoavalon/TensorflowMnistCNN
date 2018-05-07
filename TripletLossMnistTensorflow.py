@@ -17,16 +17,22 @@ class TripletNet:
         self.x2 = tf.placeholder(tf.float32, [None, 784])
         self.x3 = tf.placeholder(tf.float32, [None, 784]) 
         
+        self.test = tf.placeholder(tf.float32, [None, 784], name='testPlaceholder') 
+        self.testY = tf.placeholder(tf.int32)         
+        
         with tf.variable_scope("triplet") as scope:
-            self.o1 = self.model(tf.reshape(self.x1,[batchSize,28,28,1])) #self.network(self.x1)
+            self.o1 = self.model(tf.reshape(self.x1,[batchSize,28,28,1])) 
             scope.reuse_variables() 
-            self.o2 = self.model(tf.reshape(self.x2,[batchSize,28,28,1])) #self.network(self.x2)
+            self.o2 = self.model(tf.reshape(self.x2,[batchSize,28,28,1])) 
             scope.reuse_variables() 
-            self.o3 = self.model(tf.reshape(self.x3,[batchSize,28,28,1])) #self.network(self.x3)
+            self.o3 = self.model(tf.reshape(self.x3,[batchSize,28,28,1])) 
+            scope.reuse_variables() 
+            self.otest = self.model(tf.reshape(self.test,[batchSize,28,28,1]))
         
         # Create loss
         self.y_ = tf.placeholder(tf.float32, [None])
         self.loss = self.TripletLoss() #self.loss_with_spring()
+        self.testAcc = self.loss #self.Accuracy()   # C H A N G E
         
   
     def model(self, input, reuse = tf.AUTO_REUSE) :
@@ -58,11 +64,15 @@ class TripletNet:
           with tf.variable_scope("conv5") as scope:
             net = tf.contrib.layers.conv2d(net, 2, [1, 1], activation_fn=None, padding='SAME',
             weights_initializer=tf.contrib.layers.xavier_initializer_conv2d(),scope=scope,reuse=reuse)
-            net = tf.contrib.layers.max_pool2d(net, [2, 2], padding='SAME')
+            net = tf.contrib.layers.max_pool2d(net, [2, 2], padding='SAME')            
 
         net = tf.contrib.layers.flatten(net)
-        return net
+        #classification = tf.layers.dense(net, 2)
+        return net #, classification
 
+    def Accuracy(self) :  #just for test-set
+        
+        return tf.metrics.accuracy(labels=self.testY, predictions= self.otest) 
 
     def TripletLoss(self) :
       
@@ -110,6 +120,17 @@ def CreateTripletBatch(mnist) :
   
   return np.array(Triplet_Set)
 
+def CreateTestBatch(mnist) :  
+  Test_Set = []
+  for i in range(batchSize) : 
+    ran = np.random.randint(0,mnist.train.labels.shape[0], 1)  
+    lab = mnist.train.labels[ran]
+    par = (lab % 2 == 0)  
+    Test_Set.append(np.array([ran, par]))
+  
+  return np.array(Test_Set)
+
+
 #Fetch image data from index
 def FetchImages(mnist, indexes) : 
   
@@ -139,20 +160,36 @@ lossList = []
 
 for step in range(epochs):  
   
-    Triplet = CreateTripletBatch(mnist)
+    TripletBatch = CreateTripletBatch(mnist)
           
-    batch_x1 = FetchImages(mnist, Triplet[:,0])
-    batch_x2 = FetchImages(mnist, Triplet[:,1])
-    batch_x3 = FetchImages(mnist, Triplet[:,2])
-    batch_y = np.reshape(Triplet[:,3], (batchSize,)) 
+    batch_x1 = FetchImages(mnist, TripletBatch[:,0])
+    batch_x2 = FetchImages(mnist, TripletBatch[:,1])
+    batch_x3 = FetchImages(mnist, TripletBatch[:,2])
+    batch_y = np.reshape(TripletBatch[:,3], (batchSize,)) 
     
-    _, loss_v = sess.run([optimizer, triplet.loss], feed_dict={
+    TestBatch = CreateTestBatch(mnist)
+    #print(TestBatch.shape)
+    
+    #print(TestBatch[:,0].shape)
+    #print(TestBatch[:,1].shape)
+    
+    #print(TestBatch[:,0])
+    #print(TestBatch[:,1])
+    
+    #not correct...
+    #test_x = FetchImages(mnist, TestBatch[:,0])
+    
+    #print(test_x[0])
+    
+    
+    _, loss_v, Accuracy = sess.run([optimizer, triplet.loss, triplet.testAcc], feed_dict={
                         triplet.x1: batch_x1,
                         triplet.x2: batch_x2,
                         triplet.x3: batch_x3,
-                        triplet.y_: batch_y})
-    
-    print(a)
+                        triplet.y_: batch_y,
+                        triplet.test : test_x,
+                        triplet.testY : TestBatch[:,1]
+                        })
     
     
     lossList.append(loss_v)
