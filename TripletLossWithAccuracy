@@ -5,10 +5,10 @@ import matplotlib.pyplot as plt
 
 #Hyper-parameters
 
-batchSize = 64
-epochs = 40
+batchSize = 128
+epochs = 50
 margin = 4.
-learningRate = 0.0001
+learningRate = 0.001
 #optimizer  see : http://tflearn.org/optimizers/
 
 class TripletNet:
@@ -105,8 +105,15 @@ class TripletNet:
           d_n_squared = tf.square(self.distance(anchor_feature, negative_feature))
 
           loss = tf.maximum(0., d_p_squared - d_n_squared + margin)          
+          
+          #custom loss testing
+          pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),2, keepdims=True)
+          neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),2, keepdims=True)
+          
+          res = tf.maximum(0., pos_dis +0.001 - neg_dis)          #tf.less_equal(pos_dis[0,:] +0.001, neg_dis[0,:])          
+          asdf = tf.reduce_mean(res)
         
-        return tf.reduce_mean(loss)
+        return asdf #tf.reduce_mean(loss)
 
 #Get image of the opposite parity
 def GetOpositeParityImage(mnist, par) :
@@ -170,8 +177,9 @@ g = tf.Graph() #reset graph
 sess = tf.InteractiveSession(graph=g)
 
 triplet = TripletNet();
-#train_step = tf.train.GradientDescentOptimizer(learningRate).minimize(triplet.loss)
+#optimizer = tf.train.GradientDescentOptimizer(learningRate).minimize(triplet.loss)
 optimizer = tf.train.AdamOptimizer(learning_rate = learningRate).minimize(triplet.loss)
+#optimizer = tf.train.RMSPropOptimizer(learning_rate = learningRate).minimize(triplet.loss)
 
 tf.initialize_all_variables().run()
 
