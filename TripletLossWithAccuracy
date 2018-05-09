@@ -6,10 +6,10 @@ import matplotlib.pyplot as plt
 #Hyper-parameters
 
 batchSize = 128
-epochs = 100
-margin = 4.
-fineMargin = 0.1
+epochs = 1000
+margin = 0.1
 learningRate = 0.001
+printAfterSteps = 50
 #optimizer  see : http://tflearn.org/optimizers/
 
 class TripletNet:
@@ -74,7 +74,7 @@ class TripletNet:
         
         return net , classification
 
-    def Accuracy(self) :  #just for test-set
+    def Accuracy(self) :  
       
         anchor_feature = self.o3
         positive_feature = self.o2
@@ -83,10 +83,9 @@ class TripletNet:
         pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),2, keepdims=True)
         neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),2, keepdims=True)
         
-        res = tf.less_equal(pos_dis[0,:] +fineMargin, neg_dis[0,:])
+        res = tf.less_equal(pos_dis[0,:] +margin, neg_dis[0,:])
         su = tf.reduce_sum(tf.cast(res, tf.float32))/batchSize
-        # check 
-        
+                
         return su 
       
     def distance(self, x, y):         
@@ -102,19 +101,13 @@ class TripletNet:
         negative_feature = self.o1                        
       
         with tf.name_scope("triplet_loss"):
-          d_p_squared = tf.square(self.distance(anchor_feature, positive_feature))
-          d_n_squared = tf.square(self.distance(anchor_feature, negative_feature))
-
-          loss = tf.maximum(0., d_p_squared - d_n_squared + margin)          
-          
-          #custom loss testing
           pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),2, keepdims=True)
           neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),2, keepdims=True)
           
-          res = tf.maximum(0., pos_dis +fineMargin - neg_dis)          #tf.less_equal(pos_dis[0,:] +0.001, neg_dis[0,:])          
-          asdf = tf.reduce_mean(res)
+          res = tf.maximum(0., pos_dis +margin - neg_dis) 
+          loss = tf.reduce_mean(res)
         
-        return asdf #tf.reduce_mean(loss)
+        return loss
 
 #Get image of the opposite parity
 def GetOpositeParityImage(mnist, par) :
@@ -211,8 +204,8 @@ for step in range(epochs):
     
     lossList.append(loss_v)
     accList.append(Accuracy)
-    if step % 1 == 0:
-        print ('step %d: loss %.6f  train-accuracy: %.2f' % (step, loss_v, Accuracy))        
+    if step % printAfterSteps == 0:
+        print ('step %d: loss %.6f  training-accuracy: %.3f' % (step, loss_v, Accuracy))        
 
 # plot Loss Graph
 plt.plot(lossList)
