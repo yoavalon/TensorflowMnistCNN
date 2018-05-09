@@ -26,14 +26,12 @@ class TripletNet:
             scope.reuse_variables() 
             self.o2 = self.model(tf.reshape(self.x2,[batchSize,28,28,1])) 
             scope.reuse_variables() 
-            self.o3 = self.model(tf.reshape(self.x3,[batchSize,28,28,1])) 
-            #scope.reuse_variables() 
-            #_, self.otest = self.model(tf.reshape(self.test,[batchSize,28,28,1]))
+            self.o3 = self.model(tf.reshape(self.x3,[batchSize,28,28,1]))             
         
         # Create loss
         self.y_ = tf.placeholder(tf.float32, [None])
-        self.loss,self.equalLoss, self.diffLoss = self.TripletLoss() #self.loss_with_spring()
-        self.testAcc = self.Accuracy()   
+        self.loss = self.TripletLoss() #self.loss_with_spring()
+        self.Acc = self.Accuracy()   
         
   
     def model(self, input, reuse = tf.AUTO_REUSE) :
@@ -77,16 +75,24 @@ class TripletNet:
 
     def Accuracy(self) :  #just for test-set
       
+        anchor_feature = self.o3
+        positive_feature = self.o2
+        negative_feature = self.o1                        
+      
+        pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),2, keepdims=True)
+        neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),2, keepdims=True)
+        
+        res = tf.greater_equal(pos_dis[0,:], neg_dis[0,:])
+        su = tf.reduce_sum(tf.cast(res, tf.float32))/batchSize
         # check 
         
-        return self.equalLoss #self.loss #tf.metrics.accuracy(labels=self.testY, predictions= self.otest) 
+        return su 
       
     def distance(self, x, y):         
         
-        d = tf.square(tf.subtract(x, y))
-        d = tf.sqrt(tf.reduce_sum(d)) # What about the axis ???
+        distance = tf.sqrt(tf.reduce_sum(tf.square(tf.subtract(x, y))))
         
-        return d
+        return distance
       
     def TripletLoss(self) :
       
@@ -98,35 +104,9 @@ class TripletNet:
           d_p_squared = tf.square(self.distance(anchor_feature, positive_feature))
           d_n_squared = tf.square(self.distance(anchor_feature, negative_feature))
 
-          loss = tf.maximum(0., d_p_squared - d_n_squared + margin)
+          loss = tf.maximum(0., d_p_squared - d_n_squared + margin)          
         
-
-        return tf.reduce_mean(loss), tf.reduce_mean(d_p_squared), tf.reduce_mean(d_n_squared)
-
-      
-'''
-    def TripletLoss(self) :
-      
-        anchor_output = self.o3
-        positive_output = self.o2
-        negative_output = self.o1                        
-        
-        with tf.name_scope("triplet_loss"):
-        
-          #d_p_squared = tf.square(tf.sqrt(tf.reduce_sum(tf.square(tf.subtract(anchor_output, positive_output)))))
-          #d_n_squared = tf.square(tf.sqrt(tf.reduce_sum(tf.square(tf.subtract(anchor_output, negative_output)))))
-          
-          #loss = tf.maximum(0., d_p_squared - d_n_squared + margin)
-          
-          d_pos = tf.reduce_sum(tf.square(anchor_output - positive_output), 1)
-          d_neg = tf.reduce_sum(tf.square(anchor_output - negative_output), 1)
-
-          loss = tf.maximum(0., margin + d_pos - d_neg)
-          #loss = tf.reduce_mean(loss)
-      
         return tf.reduce_mean(loss)
-        
-'''      
 
 #Get image of the opposite parity
 def GetOpositeParityImage(mnist, par) :
@@ -196,6 +176,7 @@ optimizer = tf.train.AdamOptimizer(learning_rate = learningRate).minimize(triple
 tf.initialize_all_variables().run()
 
 lossList = []
+accList = []
 
 for step in range(epochs):  
   
@@ -209,7 +190,7 @@ for step in range(epochs):
     TestBatch = CreateTestBatch(mnist)    
     test_images = FetchImages(mnist, TestBatch[:,0])
         
-    _, loss_v, Accuracy = sess.run([optimizer, triplet.loss, triplet.testAcc], feed_dict={
+    _, loss_v, Accuracy = sess.run([optimizer, triplet.loss, triplet.Acc], feed_dict={
                         triplet.x1: batch_x1,
                         triplet.x2: batch_x2,
                         triplet.x3: batch_x3,
@@ -220,13 +201,20 @@ for step in range(epochs):
     
     
     lossList.append(loss_v)
+    accList.append(Accuracy)
     if step % 1 == 0:
-        print ('step %d: loss %.3f' % (step, loss_v))
-        print("      ", Accuracy)
+        print ('step %d: loss %.3f  accuracy: %.2f' % (step, loss_v, Accuracy))        
 
 # plot Loss Graph
 plt.plot(lossList)
 plt.title('Loss')
 plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.show()
+
+# plot Loss Graph
+plt.plot(accList)
+plt.title('Accuracy')
+plt.ylabel('accuracy')
 plt.xlabel('epoch')
 plt.show()
