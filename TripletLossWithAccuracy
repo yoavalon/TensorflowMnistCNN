@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 
 #Hyper-parameters
 
-batchSize = 128
-epochs = 20
+batchSize = 64
+epochs = 40
 margin = 4.
 learningRate = 0.0001
 #optimizer  see : http://tflearn.org/optimizers/
@@ -82,7 +82,7 @@ class TripletNet:
         pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),2, keepdims=True)
         neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),2, keepdims=True)
         
-        res = tf.less_equal(pos_dis[0,:], neg_dis[0,:])
+        res = tf.less_equal(pos_dis[0,:] +0.001, neg_dis[0,:])
         su = tf.reduce_sum(tf.cast(res, tf.float32))/batchSize
         # check 
         
