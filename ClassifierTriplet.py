@@ -98,10 +98,16 @@ class TripletNet:
         positive_feature = self.output2
         negative_feature = self.output1    
       
+        print(anchor_feature)
+      
         pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),1, keepdims=True)
         neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),1, keepdims=True)
         
-        correct = tf.less_equal(pos_dis[0,:] +margin, neg_dis[0,:])
+        
+        print(pos_dis)
+        
+        #correct = tf.less_equal(pos_dis[0,:] +margin, neg_dis[0,:])
+        correct = tf.less_equal(pos_dis +margin, neg_dis)
         acc = tf.reduce_sum(tf.cast(correct, tf.float32))/batchSize
                 
         return acc 
@@ -121,14 +127,13 @@ class TripletNet:
         
         return loss
       
-    def ClassLoss(self) : #===============================================================================================================================================================
+    def ClassLoss(self) : 
                 
         with tf.variable_scope("GetClassLoss") as scope:            
             scope.reuse_variables() 
             pred = self.classification(self.output3)         
               
         loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels = self.y_))       
-        #print(loss)
            
         return loss      
 
