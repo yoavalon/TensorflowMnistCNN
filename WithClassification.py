@@ -6,12 +6,12 @@ import numpy as np
 
 #Hyper-parameters
 
-batchSize = 128            #128
-epochs = 100              #1000
+batchSize = 4            #128
+epochs = 1              #1000
 margin = 0.1               #0.1
 learningRate = 0.001       #0.001
 displaySteps = 1           #100
-dropout = 0.85            # Dropout, probability to keep units
+dropout = 0.5            # Dropout, probability to keep units
 
 class TripletNet:
     
@@ -21,9 +21,6 @@ class TripletNet:
         self.x3 = tf.placeholder(tf.float32, [None, 784]) 
         self.y_ = tf.placeholder(tf.float32, [None,],)
                 
-        #self.testX = tf.placeholder(tf.float32, [None, 784], name='testPlaceholder') 
-        #self.testY = tf.placeholder(tf.int32)       
-        
         with tf.variable_scope("triplet") as scope:
             self.output1 = self.network(tf.reshape(self.x1,[batchSize,28,28,1])) 
             scope.reuse_variables() 
@@ -71,7 +68,7 @@ class TripletNet:
 
         net = tf.contrib.layers.flatten(net)        #embedding
                 
-        return net,net
+        return net
       
       
     def classification(self, input, reuse = tf.AUTO_REUSE) :
@@ -84,15 +81,14 @@ class TripletNet:
           with tf.variable_scope("FullyConnected1") as scope:
               net = tf.contrib.layers.fully_connected(input,2,reuse=reuse,activation_fn=tf.nn.relu, scope = 'FullyConnected1')
               weights_initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=None, dtype=tf.float32)
-
+                    
           with tf.variable_scope("FullyConnected2") as scope:
-              net = tf.contrib.layers.fully_connected(net,2,reuse=reuse,activation_fn=tf.nn.relu, scope = 'FullyConnected2')
-              weights_initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=None, dtype=tf.float32)
-
-          with tf.variable_scope("out") as scope:
-              out = tf.contrib.layers.fully_connected(net,2,reuse=reuse,activation_fn=tf.nn.relu, scope = 'out')
+              out = tf.contrib.layers.fully_connected(net,2,reuse=reuse,activation_fn=tf.nn.relu, scope = 'FullyConnected2')
               weights_initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=None, dtype=tf.float32)        
-       
+
+          with tf.variable_scope("Dropout") as scope:              
+              out2 = tf.contrib.layers.dropout(out, keep_prob=dropout, noise_shape=None, is_training=True, outputs_collections=None, scope=None, seed=None)
+      
         return out
       
 
@@ -102,8 +98,8 @@ class TripletNet:
         positive_feature = self.output2
         negative_feature = self.output1    
       
-        pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),2, keepdims=True)
-        neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),2, keepdims=True)
+        pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),1, keepdims=True)
+        neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),1, keepdims=True)
         
         correct = tf.less_equal(pos_dis[0,:] +margin, neg_dis[0,:])
         acc = tf.reduce_sum(tf.cast(correct, tf.float32))/batchSize
@@ -116,9 +112,10 @@ class TripletNet:
         positive_feature = self.output2
         negative_feature = self.output1  
         
+        
         with tf.name_scope("triplet_loss"):               
-          pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),2, keepdims=True)
-          neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),2, keepdims=True)
+          pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),1, keepdims=True)
+          neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),1, keepdims=True)
           
           res = tf.maximum(0., pos_dis + margin - neg_dis) 
           loss = tf.reduce_mean(res)          
@@ -126,13 +123,30 @@ class TripletNet:
         return loss
       
     def ClassLoss(self) :
-            
-        #y_hat = self.classification(self.output3)
-        #loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=y_hat, labels = self.y_))
         
-        #print("came to class cl")
+        print("in class loss")
         
-        loss = self.loss
+        print(self.y_)
+        
+        pred = self.classOutput
+        
+        odd = tf.constant([[0.],[1.]]) 
+        even = tf.constant([[1.],[0.]]) 
+        
+        oneHot = tf.placeholder(tf.float32, [256, 2])        
+        
+        if(self.y_ == 0) :
+          oneHot = odd
+          print("odd")
+        else : 
+          oneHot = even
+          print("even")
+        
+        oneHot = tf.constant([[[0.00955396,0.00471799],[0.01370436,0.00676756],[0.00179436,0.0008861 ], [0.00600681,0.00296632]]])        
+        
+        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels = oneHot))
+        
+        #loss = self.loss
         
         return loss      
 
@@ -143,8 +157,8 @@ class TripletNet:
         negative_feature = self.output1                        
       
         with tf.name_scope("triplet_loss"):
-          pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),2, keepdims=True)
-          neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),2, keepdims=True)
+          pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),1, keepdims=True)
+          neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),1, keepdims=True)
           
           res = tf.maximum(0., pos_dis + margin - neg_dis) 
           loss = tf.reduce_mean(res)
@@ -172,13 +186,6 @@ def GetTriplet(mnist) :
   lab = mnist.train.labels[ran]
   par = (lab % 2 == 0)
     
-  '''
-  if(par==0) :
-    para = np.array([0,1])
-  else :
-    para = np.array([1,0])
-    '''
-  
   return np.array([ran, GetOpositeParityImage(mnist, par), GetOpositeParityImage(mnist, par), par]) #return [negative, positive, anchor, binary label]   par = 0 even, odd, odd     par = 1 odd, even, even
   
 #Creates batch of shape (128,4) where as 128 is batch size and 4 stands for a triplet plus binary label
@@ -244,13 +251,15 @@ for step in range(epochs):
   
     TripletBatch = CreateTripletBatch(mnist)
     
-    #print(TripletBatch)
-    #print(batch_y)
+    print(TripletBatch)
+    
     
     batch_x1 = FetchImages(mnist, TripletBatch[:,0])
     batch_x2 = FetchImages(mnist, TripletBatch[:,1])
     batch_x3 = FetchImages(mnist, TripletBatch[:,2])
     batch_y = np.reshape(TripletBatch[:,3], (batchSize,))        
+    
+    print(batch_y)
             
     _, loss_v, Accuracy, clas = sess.run([optimizer,  model.loss, model.Accuracy, model.classOutput], feed_dict={
                         model.x1: batch_x1,
