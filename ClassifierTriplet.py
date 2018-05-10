@@ -10,7 +10,8 @@ batchSize = 128            #128
 epochs = 100              #1000
 margin = 0.1               #0.1
 learningRate = 0.001       #0.001
-printAfterSteps = 1      #100
+displaySteps = 1           #100
+dropout = 0.5            # Dropout, probability to keep units
 
 class TripletNet:
     
@@ -18,20 +19,18 @@ class TripletNet:
         self.x1 = tf.placeholder(tf.float32, [None, 784])        
         self.x2 = tf.placeholder(tf.float32, [None, 784])
         self.x3 = tf.placeholder(tf.float32, [None, 784]) 
-        self.y_ = tf.placeholder(tf.float32, [None])
+        self.y_ = tf.placeholder(tf.float32, [None,2],)
                 
-        self.testX = tf.placeholder(tf.float32, [None, 784], name='testPlaceholder') 
-        self.testY = tf.placeholder(tf.int32)       
-        
         with tf.variable_scope("triplet") as scope:
             self.output1 = self.network(tf.reshape(self.x1,[batchSize,28,28,1])) 
             scope.reuse_variables() 
             self.output2 = self.network(tf.reshape(self.x2,[batchSize,28,28,1])) 
             scope.reuse_variables() 
             self.output3 = self.network(tf.reshape(self.x3,[batchSize,28,28,1]))             
+            scope.reuse_variables() 
+            self.classOutput = self.classification(self.output3)                           
         
-        # Create loss
-        
+        self.classLoss = self.ClassLoss()
         self.loss = self.TripletLoss() 
         self.Accuracy = self.GetAccuracy()           
         
@@ -68,45 +67,39 @@ class TripletNet:
             net = tf.contrib.layers.max_pool2d(net, [2, 2], padding='SAME')            
 
         net = tf.contrib.layers.flatten(net)        #embedding
-        
-        return net,net
+                
+        return net
       
       
     def classification(self, input, reuse = tf.AUTO_REUSE) :
         
         if (reuse):
-          tf.get_variable_scope().reuse_variables()          
+          tf.get_variable_scope().reuse_variables()
+          
+        with tf.name_scope("classification") :          
         
-        with tf.variable_scope("FullyConnected1") as scope:
-            net = tf.contrib.layers.fully_connected(input,2,reuse=reuse,scope = 'FullyConnected1')
-            weights_initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=None, dtype=tf.float32)
-        
-        with tf.variable_scope("softmax") as scope:            
-            net = tf.contrib.layers.softmax(net)
-            weights_initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=None, dtype=tf.float32)
-        
-        '''
-        with tf.variable_scope("FullyConnected2") as scope:
-            classification = tf.contrib.layers.fully_connected(fc1,2,reuse=reuse, scope = 'FullyConnected2')
-            weights_initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=None, dtype=tf.float32)
-        '''
-        '''
-        with tf.variable_scope("Dropout") as scope:        
-            classification = tf.contrib.layers.dropout(net,keep_prob=0.5, noise_shape=None, is_training=True, outputs_collections=None, scope=None, seed=None)
-            weights_initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=None, dtype=tf.float32)
-        '''
-        
-        return net
+          with tf.variable_scope("FullyConnected1") as scope:
+              net = tf.contrib.layers.fully_connected(input,2,reuse=reuse,activation_fn=tf.nn.relu, scope = 'FullyConnected1')
+              weights_initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=None, dtype=tf.float32)
+                    
+          with tf.variable_scope("FullyConnected2") as scope:
+              out = tf.contrib.layers.fully_connected(net,2,reuse=reuse,activation_fn=tf.nn.relu, scope = 'FullyConnected2')
+              weights_initializer = tf.contrib.layers.xavier_initializer(uniform=True, seed=None, dtype=tf.float32)        
+
+          with tf.variable_scope("Dropout") as scope:              
+              out2 = tf.contrib.layers.dropout(out, keep_prob=dropout, noise_shape=None, is_training=True, outputs_collections=None, scope=None, seed=None)
+      
+        return out2
       
 
     def GetAccuracy(self) :  
       
         anchor_feature = self.output3
         positive_feature = self.output2
-        negative_feature = self.output1                        
+        negative_feature = self.output1    
       
-        pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),2, keepdims=True)
-        neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),2, keepdims=True)
+        pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),1, keepdims=True)
+        neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),1, keepdims=True)
         
         correct = tf.less_equal(pos_dis[0,:] +margin, neg_dis[0,:])
         acc = tf.reduce_sum(tf.cast(correct, tf.float32))/batchSize
@@ -117,16 +110,27 @@ class TripletNet:
       
         anchor_feature = self.output3
         positive_feature = self.output2
-        negative_feature = self.output1                        
-      
+        negative_feature = self.output1          
+        
         with tf.name_scope("triplet_loss"):               
-          pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),2, keepdims=True)
-          neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),2, keepdims=True)
+          pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),1, keepdims=True)
+          neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),1, keepdims=True)
           
           res = tf.maximum(0., pos_dis + margin - neg_dis) 
-          loss = tf.reduce_mean(res)
+          loss = tf.reduce_mean(res)          
         
         return loss
+      
+    def ClassLoss(self) : #===============================================================================================================================================================
+                
+        with tf.variable_scope("GetClassLoss") as scope:            
+            scope.reuse_variables() 
+            pred = self.classification(self.output3)         
+              
+        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels = self.y_))       
+        #print(loss)
+           
+        return loss      
 
     def Evaluate(self) :
       
@@ -135,8 +139,8 @@ class TripletNet:
         negative_feature = self.output1                        
       
         with tf.name_scope("triplet_loss"):
-          pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),2, keepdims=True)
-          neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),2, keepdims=True)
+          pos_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, positive_feature)),1, keepdims=True)
+          neg_dis = tf.reduce_mean(tf.square(tf.subtract(anchor_feature, negative_feature)),1, keepdims=True)
           
           res = tf.maximum(0., pos_dis + margin - neg_dis) 
           loss = tf.reduce_mean(res)
@@ -162,8 +166,8 @@ def GetTriplet(mnist) :
   
   ran = np.random.randint(0,mnist.train.labels.shape[0], 1)  
   lab = mnist.train.labels[ran]
-  par = (lab % 2 == 0)  
-  
+  par = [(lab % 2 == 0)]
+    
   return np.array([ran, GetOpositeParityImage(mnist, par), GetOpositeParityImage(mnist, par), par]) #return [negative, positive, anchor, binary label]   par = 0 even, odd, odd     par = 1 odd, even, even
   
 #Creates batch of shape (128,4) where as 128 is batch size and 4 stands for a triplet plus binary label
@@ -204,9 +208,10 @@ g = tf.Graph() #reset graph
 sess = tf.InteractiveSession(graph=g)
 
 model = TripletNet();
-#optimizer = tf.train.GradientDescentOptimizer(learningRate).minimize(model.loss)
+
 optimizer = tf.train.AdamOptimizer(learning_rate = learningRate).minimize(model.loss)
-#optimizer = tf.train.RMSPropOptimizer(learning_rate = learningRate).minimize(model.loss)
+classifier = tf.train.AdamOptimizer(learning_rate = learningRate).minimize(model.classLoss)
+
 
 tf.initialize_all_variables().run()
 
@@ -216,28 +221,37 @@ accList = []
 for step in range(epochs):  
   
     TripletBatch = CreateTripletBatch(mnist)
-          
+    
+    #print(TripletBatch)    
+    
     batch_x1 = FetchImages(mnist, TripletBatch[:,0])
     batch_x2 = FetchImages(mnist, TripletBatch[:,1])
     batch_x3 = FetchImages(mnist, TripletBatch[:,2])
-    batch_y = np.reshape(TripletBatch[:,3], (batchSize,)) 
+    batch_y = np.reshape(TripletBatch[:,3], (batchSize,))
     
-    TestBatch = CreateTestBatch(mnist)    
-    test_images = FetchImages(mnist, TestBatch[:,0])
+    y_list = []
         
-    _, loss_v, Accuracy = sess.run([optimizer, model.loss, model.Accuracy], feed_dict={
+    
+    for i in batch_y :
+      if(batch_y[i]==0)  :
+        y_list.append(np.array([0,1]))
+      else : 
+        y_list.append(np.array([1,0]))
+    
+    #print(y_list)
+    
+    _, loss_v, loss_c, Accuracy = sess.run([optimizer,  model.loss, model.classLoss ,model.Accuracy], feed_dict={
                         model.x1: batch_x1,
                         model.x2: batch_x2,
                         model.x3: batch_x3,
-                        model.y_: batch_y,
-                        model.testX : test_images,
-                        model.testY : TestBatch[:,1]
+                        model.y_: y_list,                        
                         })    
     
     lossList.append(loss_v)
     accList.append(Accuracy)
-    if step % printAfterSteps == 0:
-        print ('step %d: loss %.6f  training-accuracy: %.3f ' % (step, loss_v, Accuracy))                        
+    if step % displaySteps == 0:
+        print ('step %3d:  loss: %.6f  class-loss: %.6f   triplet-accuracy: %.3f ' % (step, loss_v, loss_c, Accuracy))                        
+    
 
 # plot Loss Graph
 plt.plot(lossList)
