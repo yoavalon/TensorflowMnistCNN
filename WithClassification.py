@@ -19,7 +19,7 @@ class TripletNet:
         self.x1 = tf.placeholder(tf.float32, [None, 784])        
         self.x2 = tf.placeholder(tf.float32, [None, 784])
         self.x3 = tf.placeholder(tf.float32, [None, 784]) 
-        self.y_ = tf.placeholder(tf.float32, [None,],)
+        self.y_ = tf.placeholder(tf.float32, [None,2],)
                 
         with tf.variable_scope("triplet") as scope:
             self.output1 = self.network(tf.reshape(self.x1,[batchSize,28,28,1])) 
@@ -124,29 +124,11 @@ class TripletNet:
       
     def ClassLoss(self) :
         
-        print("in class loss")
+        with tf.variable_scope("GetClassLoss") as scope:            
+            scope.reuse_variables() 
+            pred = self.classification(self.output3)         
         
-        print(self.y_)
-        
-        pred = self.classOutput
-        
-        odd = tf.constant([[0.],[1.]]) 
-        even = tf.constant([[1.],[0.]]) 
-        
-        oneHot = tf.placeholder(tf.float32, [256, 2])        
-        
-        if(self.y_ == 0) :
-          oneHot = odd
-          print("odd")
-        else : 
-          oneHot = even
-          print("even")
-        
-        oneHot = tf.constant([[[0.00955396,0.00471799],[0.01370436,0.00676756],[0.00179436,0.0008861 ], [0.00600681,0.00296632]]])        
-        
-        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels = oneHot))
-        
-        #loss = self.loss
+        loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=pred, labels = self.y_))
         
         return loss      
 
@@ -184,7 +166,7 @@ def GetTriplet(mnist) :
   
   ran = np.random.randint(0,mnist.train.labels.shape[0], 1)  
   lab = mnist.train.labels[ran]
-  par = (lab % 2 == 0)
+  par = [(lab % 2 == 0)]
     
   return np.array([ran, GetOpositeParityImage(mnist, par), GetOpositeParityImage(mnist, par), par]) #return [negative, positive, anchor, binary label]   par = 0 even, odd, odd     par = 1 odd, even, even
   
@@ -228,7 +210,7 @@ sess = tf.InteractiveSession(graph=g)
 model = TripletNet();
 #optimizer = tf.train.GradientDescentOptimizer(learningRate).minimize(model.loss)
 optimizer = tf.train.AdamOptimizer(learning_rate = learningRate).minimize(model.loss)
-#classifier = tf.train.AdamOptimizer(learning_rate = learningRate).minimize(model.ClassLoss)
+classifier = tf.train.AdamOptimizer(learning_rate = learningRate).minimize(model.ClassLoss)
 #classifier = 1
 #optimizer = tf.train.RMSPropOptimizer(learning_rate = learningRate).minimize(model.loss)
 
@@ -257,15 +239,24 @@ for step in range(epochs):
     batch_x1 = FetchImages(mnist, TripletBatch[:,0])
     batch_x2 = FetchImages(mnist, TripletBatch[:,1])
     batch_x3 = FetchImages(mnist, TripletBatch[:,2])
-    batch_y = np.reshape(TripletBatch[:,3], (batchSize,))        
+    batch_y = np.reshape(TripletBatch[:,3], (batchSize,))
     
-    print(batch_y)
-            
+    y_list = []
+        
+    
+    for i in batch_y :
+      if(batch_y[i]==0)  :
+        y_list.append(np.array([0,1]))
+      else : 
+        y_list.append(np.array([1,0]))
+    
+    print(y_list)
+    
     _, loss_v, Accuracy, clas = sess.run([optimizer,  model.loss, model.Accuracy, model.classOutput], feed_dict={
                         model.x1: batch_x1,
                         model.x2: batch_x2,
                         model.x3: batch_x3,
-                        model.y_: batch_y,                        
+                        model.y_: y_list,                        
                         })    
     
     lossList.append(loss_v)
