@@ -14,7 +14,7 @@ batchSize = 80            #128
 epochs = 50              #1000
 margin = 0.1               #0.1
 learningRate = 0.001       #0.001
-displaySteps = 100           #100
+displaySteps = 10           #100
 dropout = 0.3            # Dropout, probability to keep units
 
 class TripletNet:
@@ -34,7 +34,7 @@ class TripletNet:
                 
         self.loss = self.TripletLoss() 
         self.Accuracy = self.GetAccuracy()  
-        self.Pred = self.Predict(self.output3[1],10)
+        self.pred = self.Predict(self.output3[1],10)
         
     def network(self, input, reuse = tf.AUTO_REUSE) :
         
@@ -93,7 +93,7 @@ class TripletNet:
 
     def Predict(self, input, k = 10):
       
-        neg_one = tf.constant(-1.0, dtype=tf.float64)    
+        neg_one = tf.constant(-1.0, dtype=tf.float32)    
         distances =  tf.reduce_sum(tf.abs(tf.subtract(self.output3, input)), 1)
         neg_distances = tf.multiply(distances, neg_one)    
         vals, indx = tf.nn.top_k(neg_distances, k)    
@@ -206,7 +206,7 @@ for step in range(epochs):
       else : 
         y_list.append(np.array([0.,1.]))
     
-    _, loss_v, Accuracy, clas = sess.run([optimizer, model.loss, model.Accuracy, model.output3], feed_dict={
+    _, loss_v, Accuracy, clas, pred = sess.run([optimizer, model.loss, model.Accuracy, model.output3, model.pred], feed_dict={
                         model.x1: batch_x1,
                         model.x2: batch_x2,
                         model.x3: batch_x3,
@@ -218,6 +218,7 @@ for step in range(epochs):
     accList.append(Accuracy)
     if step % displaySteps == 0:
         print ('step %3d:  loss: %.6f   triplet-accuracy: %.3f ' % (step, loss_v, Accuracy)) 
+        print("Preds:", pred, batch_y[0])
     
     if step== epochs-1 : 
       
