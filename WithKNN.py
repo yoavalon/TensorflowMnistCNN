@@ -11,11 +11,12 @@ print(a)
 #Hyper-parameters
 
 batchSize = 80            #128
-epochs = 50              #1000
+epochs = 500              #1000
 margin = 0.1               #0.1
 learningRate = 0.001       #0.001
-displaySteps = 10           #100
-dropout = 0.3            # Dropout, probability to keep units
+displaySteps = 50           #100
+testEpochs = 10              #2
+KNN_k = 2                  #10
 
 class TripletNet:
     
@@ -34,7 +35,7 @@ class TripletNet:
                 
         self.loss = self.TripletLoss() 
         self.Accuracy = self.GetAccuracy()  
-        self.pred = self.Predict(self.output3[1],10)
+
         
     def network(self, input, reuse = tf.AUTO_REUSE) :
         
@@ -91,7 +92,7 @@ class TripletNet:
         
         return loss
 
-    def Predict(self, input, k = 10):
+    def Predict(self, input, k = KNN_k):              #Prediction using KNN
       
         neg_one = tf.constant(-1.0, dtype=tf.float32)    
         distances =  tf.reduce_sum(tf.abs(tf.subtract(self.output3, input)), 1)
@@ -99,9 +100,12 @@ class TripletNet:
         vals, indx = tf.nn.top_k(neg_distances, k)    
         prediction = tf.gather(self.y_, indx)
         
-        return prediction      
+        res = tf.reduce_sum(prediction,0)        
+        index = tf.argmax(res)
+        
+        return index
     
-    def GetAccuracy(self) :  
+    def GetAccuracy(self) :  #TripletAccuracy
       
         anchor_feature = self.output3
         positive_feature = self.output2
@@ -113,8 +117,7 @@ class TripletNet:
         correct = tf.less_equal(pos_dis +margin, neg_dis)
         acc = tf.reduce_sum(tf.cast(correct, tf.float32))/batchSize
                 
-        return acc 
-      
+        return acc       
     
       
 #Get image of the opposite parity
@@ -206,7 +209,7 @@ for step in range(epochs):
       else : 
         y_list.append(np.array([0.,1.]))
     
-    _, loss_v, Accuracy, clas, pred = sess.run([optimizer, model.loss, model.Accuracy, model.output3, model.pred], feed_dict={
+    _, loss_v, Accuracy, clas = sess.run([optimizer, model.loss, model.Accuracy, model.output3], feed_dict={
                         model.x1: batch_x1,
                         model.x2: batch_x2,
                         model.x3: batch_x3,
@@ -218,7 +221,7 @@ for step in range(epochs):
     accList.append(Accuracy)
     if step % displaySteps == 0:
         print ('step %3d:  loss: %.6f   triplet-accuracy: %.3f ' % (step, loss_v, Accuracy)) 
-        print("Preds:", pred, batch_y[0])
+        
     
     if step== epochs-1 : 
       
@@ -228,7 +231,7 @@ for step in range(epochs):
         else :
           plt.plot(clas[i,0], clas[i,1], "o", c = 'red')            
       
-      plt.title('Embeddings')
+      plt.title('Embeddings (for last Batch)')
       plt.ylabel('y')
       plt.xlabel('x')
       plt.show()      
@@ -248,10 +251,10 @@ plt.xlabel('epoch')
 plt.show()
 
 
-'''
 #Calculating test accuracy
+print("Calculaing Test Accuracy..")
 count = 0
-for step in range(epochs):    
+for step in range(testEpochs):    
     DualBatch = CreateTestBatch(mnist)
     
     batch_x3 = FetchImages(mnist, DualBatch[:,0], False)    
@@ -265,13 +268,12 @@ for step in range(epochs):
       else : 
         y_list.append(np.array([0.,1.]))
  
-    batchAcc = sess.run([model.classOutput], feed_dict={model.x3: batch_x3, model.y_: y_list})    
-    
-    for i in range(batchSize):      
-      if(np.argmax(batchAcc[0][i]) == np.argmax(y_list[i])) : 
+      batchAcc = sess.run([model.Predict(model.output3[i])], feed_dict={model.x3: batch_x3, model.y_: y_list})    
+      #print(batchAcc, batch_y[i])
+      if(batchAcc == np.argmax(y_list[i])) : 
         count += 1
 
-TestAcc = count/(batchSize*epochs)        
+TestAcc = count/(batchSize*testEpochs)        
 print("TestAccuracy: ", TestAcc)
-'''
+
     
